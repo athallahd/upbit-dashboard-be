@@ -4,7 +4,7 @@ services:
     container_name: upbit-dashboard-mysql
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: upbit_dummy_dev
+      MYSQL_DATABASE: upbit_local_dev
       MYSQL_USER: athallahd
       MYSQL_PASSWORD: upbit_dev_password
       MYSQL_ROOT_PASSWORD: root_dev_password
