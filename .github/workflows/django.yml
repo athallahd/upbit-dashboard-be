@@ -1,0 +1,33 @@
+name: Create and publish package
+on:
+  push:
+    branches: ['master']
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  build:
+    runs-on: upbit-global-202506
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          repository: dunamu-partner-upbit-global/lens
+          token: ${{ secrets.LENS_GITHUB_PAT }}
+          path: './libs/lens'
+
+      - name: Build and push container image
+        uses: dunamu-partner-upbit-global/workflows/actions/build-container-image@main
+        with:
+          image_name: ${{ github.repository }}
+          image_tag: |
+            type=raw,value=apac
+          push_registry: ${{ github.event_name != 'pull_request' }}
+          token: ${{ secrets.GITHUB_TOKEN }}

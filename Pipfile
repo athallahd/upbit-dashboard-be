@@ -1,0 +1,36 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[packages]
+django = "==5.2.13"
+django-admin-rangefilter = "==0.13.5"
+djangorestframework = "==3.16.1"
+mysqlclient = "*"
+python-dotenv = "==1.1.0"
+requests = "==2.32.4"
+paramiko = "==3.5.0"
+python-gnupg = "==0.5.6"
+django-fsm = "==3.0.1"
+django-admin-interface = "==0.32.0"
+django-cors-headers = "*"
+django-filter = "*"
+pyjwt = "*"
+# grafana-django-saml2-auth = "==3.12.0"
+urllib3 = "*"
+djangoql = "*"
+setuptools = "~=80.0.0"
+cryptography = "~=50.0.0"
+pandas = "*"
+dictor = "*"
+defusedxml = "*"
+xmlschema = "*"
+typing-extensions = "*"
+pytz = "*"
+xlrd = "*"
+OpenPyXL = "*"
+django-import-export = "*"
+
+[requires]
+python_version = "3.12.11"
