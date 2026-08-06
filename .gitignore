@@ -96,3 +96,4 @@ staticfiles
 data/
 temp/
 libs/lens/
+local-db/mysql-data/
