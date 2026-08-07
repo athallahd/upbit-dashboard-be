@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'lens_csv',
     'lens_data',
     'lens_monitoring',
+    'executive_dashboard',
 ]
 
 # for admin modal interfaces
@@ -296,6 +297,15 @@ TASKS_LIST = {
 OKTA_DOMAIN = os.getenv('OKTA_DOMAIN')
 OKTA_AUDIENCE = os.getenv('OKTA_AUDIENCE')
 OKTA_CLIENT_ID = os.getenv('OKTA_CLIENT_ID')
+
+# Executive Dashboard configuration. The SQL-owned dashboard table and its
+# source tables are read/written through the reporter connection by default.
+DASHBOARD_DB_ALIAS = os.getenv('DASHBOARD_DB_ALIAS', default='reporter')
+DASHBOARD_APPROVED_SECURITY_LEVEL = int(
+    os.getenv('DASHBOARD_APPROVED_SECURITY_LEVEL', default='2')
+)
+DASHBOARD_DORMANT_DAYS = int(os.getenv('DASHBOARD_DORMANT_DAYS', default='180'))
+DASHBOARD_REVENUE_FIELD = os.getenv('DASHBOARD_REVENUE_FIELD', default='fiat_fee')
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
