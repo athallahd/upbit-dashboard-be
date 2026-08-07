@@ -13,6 +13,7 @@ class AuthRouter(object):
         'nidchecklog',
         'dukcapilchecklog',
         "userinfo",
+        "dashboarddaily",
         "tradebase",
         "cfxassetmaster",
         "depositbase",
