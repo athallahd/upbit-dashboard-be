@@ -20,6 +20,7 @@ urlpatterns = [
     path('', include('snapshot.urls')),
     path('', include('masterdata.urls')),
     path('api/', include('lens_monitoring.urls')),
+    path('api/', include('executive_dashboard.urls')),
     path('admin/', admin.site.urls),
     path('saml2_auth/', include('django_saml2_auth.urls')),
     path('accounts/login/', django_saml2_auth.views.signin),
