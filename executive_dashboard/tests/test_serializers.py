@@ -1,15 +1,21 @@
 from datetime import date
 from decimal import Decimal
-from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from executive_dashboard.serializers import DashboardDailySerializer
+from executive_dashboard.serializers import (
+    DashboardQuerySerializer,
+    OperationalDashboardSerializer,
+)
+from executive_dashboard.services import (
+    DashboardPeriod,
+    DashboardPeriodSnapshot,
+    OperationalDashboard,
+)
 
 
-def summary(**overrides):
+def metrics(**overrides):
     values = {
-        "target_date": date(2026, 8, 6),
         "inbound_users": 100,
         "approved_users": 60,
         "first_deposit_users": 30,
@@ -17,44 +23,75 @@ def summary(**overrides):
         "first_trade_users": 20,
         "repeat_trade_users": 5,
         "dormant_users": 2,
-        "trade_count": 25,
         "trading_users": 20,
-        "total_volume_idr": Decimal("123.45"),
-        "revenue_idr": Decimal("6.78"),
+        "trade_count": 25,
+        "total_volume_idr": Decimal("123.45000000000000000000"),
+        "revenue_idr": Decimal("6.78000000000000000000"),
     }
     values.update(overrides)
-    return SimpleNamespace(**values)
+    return values
 
 
-class DashboardDailySerializerTests(SimpleTestCase):
-    def test_serializes_camel_case_metrics_and_conversions(self):
-        data = DashboardDailySerializer(
-            SimpleNamespace(summary=summary(), previous_summary=summary()),
-        ).data
+def dashboard(current_metrics=None, previous_metrics=None):
+    current = DashboardPeriodSnapshot(
+        DashboardPeriod("weekly", date(2026, 8, 3), date(2026, 8, 9)),
+        current_metrics or metrics(),
+    )
+    previous = DashboardPeriodSnapshot(
+        DashboardPeriod("weekly", date(2026, 7, 27), date(2026, 8, 2)),
+        previous_metrics,
+    )
+    return OperationalDashboard(
+        granularity="weekly",
+        current=current,
+        previous=previous,
+        series=(previous, current),
+    )
 
-        self.assertEqual(data["target_date"], "2026-08-06")
-        self.assertEqual(data["inboundUsers"], 100)
-        self.assertEqual(data["repeatTrade"], 5)
-        self.assertEqual(data["totalVolumeIdr"], "123.45")
-        self.assertEqual(data["conversion"]["approvalRate"], 60.0)
-        self.assertEqual(data["conversion"]["depositRate"], 50.0)
-        self.assertEqual(data["change"]["firstTrade"], 0.0)
 
-    def test_returns_null_change_when_previous_value_is_zero(self):
-        current = summary(inbound_users=10)
-        previous = summary(inbound_users=0)
-        data = DashboardDailySerializer(
-            SimpleNamespace(summary=current, previous_summary=previous),
+class DashboardQuerySerializerTests(SimpleTestCase):
+    def test_defaults_to_thirty_daily_periods(self):
+        serializer = DashboardQuerySerializer(data={})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data, {"granularity": "daily", "periods": 30})
+
+    def test_applies_granularity_specific_default(self):
+        serializer = DashboardQuerySerializer(data={"granularity": "weekly"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["periods"], 12)
+
+    def test_rejects_periods_over_the_granularity_limit(self):
+        serializer = DashboardQuerySerializer(
+            data={"granularity": "monthly", "periods": 25}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("periods", serializer.errors)
+
+
+class OperationalDashboardSerializerTests(SimpleTestCase):
+    def test_serializes_schema_v2_metrics_changes_and_missing_series_gap(self):
+        data = OperationalDashboardSerializer(dashboard(previous_metrics=None)).data
+
+        self.assertEqual(data["schemaVersion"], 2)
+        self.assertEqual(data["granularity"], "weekly")
+        self.assertEqual(data["periodStart"], "2026-08-03")
+        self.assertEqual(data["comparisonLabel"], "vs previous week")
+        self.assertEqual(data["metrics"]["inboundUsers"], 100)
+        self.assertEqual(data["metrics"]["totalVolumeIdr"], "123.45000000000000000000")
+        self.assertIsNone(data["change"]["inboundUsers"])
+        self.assertFalse(data["series"][0]["dataAvailable"])
+        self.assertIsNone(data["series"][0]["metrics"])
+
+    def test_change_handles_zero_previous_values_without_false_infinity(self):
+        data = OperationalDashboardSerializer(
+            dashboard(
+                current_metrics=metrics(inbound_users=10, approved_users=0),
+                previous_metrics=metrics(inbound_users=0, approved_users=0),
+            )
         ).data
 
         self.assertIsNone(data["change"]["inboundUsers"])
-
-    def test_conversion_uses_zero_for_empty_funnel_stage(self):
-        data = DashboardDailySerializer(
-            SimpleNamespace(
-                summary=summary(approved_users=0, first_deposit_users=0),
-                previous_summary=None,
-            ),
-        ).data
-
-        self.assertEqual(data["conversion"]["depositRate"], 0.0)
+        self.assertEqual(data["change"]["approvedUsers"], 0.0)

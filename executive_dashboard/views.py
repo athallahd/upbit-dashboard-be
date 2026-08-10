@@ -2,21 +2,24 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import DashboardDailySerializer
-from .services import DashboardDataNotReady, get_daily_dashboard
+from .serializers import DashboardQuerySerializer, OperationalDashboardSerializer
+from .services import DashboardDataNotReady, get_operational_dashboard
 
 
 class DashboardDailyView(APIView):
-    """Return the cached Executive Dashboard summary for Jakarta T-1."""
+    """Return period-based Executive Dashboard metrics from the existing URL."""
 
     def get(self, request) -> Response:
+        query = DashboardQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+
         try:
-            snapshot = get_daily_dashboard()
+            dashboard = get_operational_dashboard(**query.validated_data)
         except DashboardDataNotReady as exc:
-            target_date = exc.args[0]
+            period_end = exc.args[0]
             raise NotFound(
-                f"Dashboard data for {target_date.isoformat()} is not available. "
+                f"Dashboard data through {period_end.isoformat()} is not available. "
                 "Run `python manage.py refresh_dashboard` first."
             ) from exc
 
-        return Response(DashboardDailySerializer(snapshot).data)
+        return Response(OperationalDashboardSerializer(dashboard).data)

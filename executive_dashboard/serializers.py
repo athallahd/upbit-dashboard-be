@@ -1,99 +1,122 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 from rest_framework import serializers
 
-from .services import DashboardSnapshot
+from .services import METRIC_FIELDS, OperationalDashboard
 
 
-def _percentage(numerator: int, denominator: int) -> float:
-    if denominator == 0:
-        return 0.0
-    return round(numerator * 100 / denominator, 2)
+PERIOD_LIMITS = {
+    "daily": 180,
+    "weekly": 52,
+    "monthly": 24,
+}
+
+METRIC_FIELD_NAMES = {
+    "inbound_users": "inboundUsers",
+    "approved_users": "approvedUsers",
+    "first_deposit_users": "firstDeposit",
+    "repeat_deposit_users": "repeatDeposit",
+    "first_trade_users": "firstTrade",
+    "repeat_trade_users": "repeatTrade",
+    "dormant_users": "dormantUsers",
+    "trading_users": "tradingUsers",
+    "trade_count": "tradeCount",
+    "total_volume_idr": "totalVolumeIdr",
+    "revenue_idr": "revenueIdr",
+}
+
+DECIMAL_METRICS = {"total_volume_idr", "revenue_idr"}
 
 
-def _change_percentage(current: int, previous: int | None) -> float | None:
-    if previous is None or previous == 0:
-        return 0.0 if current == 0 and previous == 0 else None
-    return round((current - previous) * 100 / previous, 2)
+def _change_percentage(
+    current: int | Decimal,
+    previous: int | Decimal | None,
+) -> float | None:
+    """Return a safe previous-period percentage change."""
+
+    if previous is None:
+        return None
+    if previous == 0:
+        return 0.0 if current == 0 else None
+    return round(float((current - previous) * 100 / previous), 2)
 
 
-def _decimal_as_string(value: Decimal | None) -> str:
-    return str(value if value is not None else Decimal("0"))
+def _serialize_metrics(metrics: dict[str, int | Decimal] | None) -> dict[str, Any] | None:
+    if metrics is None:
+        return None
+
+    return {
+        METRIC_FIELD_NAMES[field]: (
+            str(metrics[field]) if field in DECIMAL_METRICS else int(metrics[field])
+        )
+        for field in METRIC_FIELDS
+    }
 
 
-class DashboardDailySerializer(serializers.Serializer):
-    """Public camelCase representation consumed by the Next.js dashboard."""
+class DashboardQuerySerializer(serializers.Serializer):
+    """Validate the timeline parameters accepted by the existing dashboard URL."""
 
-    target_date = serializers.DateField(source="summary.target_date")
-    inboundUsers = serializers.IntegerField(source="summary.inbound_users")
-    approvedUsers = serializers.IntegerField(source="summary.approved_users")
-    firstDeposit = serializers.IntegerField(source="summary.first_deposit_users")
-    repeatDeposit = serializers.IntegerField(source="summary.repeat_deposit_users")
-    firstTrade = serializers.IntegerField(source="summary.first_trade_users")
-    repeatTrade = serializers.IntegerField(source="summary.repeat_trade_users")
-    dormantUsers = serializers.IntegerField(source="summary.dormant_users")
-    tradeCount = serializers.IntegerField(source="summary.trade_count")
-    tradingUsers = serializers.IntegerField(source="summary.trading_users")
-    totalVolumeIdr = serializers.SerializerMethodField()
-    revenueIdr = serializers.SerializerMethodField()
-    conversion = serializers.SerializerMethodField()
-    change = serializers.SerializerMethodField()
-    insight = serializers.SerializerMethodField()
+    granularity = serializers.ChoiceField(
+        choices=tuple(PERIOD_LIMITS),
+        default="daily",
+        required=False,
+    )
+    periods = serializers.IntegerField(min_value=1, required=False)
 
-    def get_totalVolumeIdr(self, obj: DashboardSnapshot) -> str:
-        return _decimal_as_string(obj.summary.total_volume_idr)
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        granularity = attrs.get("granularity", "daily")
+        default_periods = {"daily": 30, "weekly": 12, "monthly": 12}
+        periods = attrs.get("periods", default_periods[granularity])
+        maximum = PERIOD_LIMITS[granularity]
+        if periods > maximum:
+            raise serializers.ValidationError(
+                {"periods": f"{granularity} periods cannot exceed {maximum}."}
+            )
+        attrs["granularity"] = granularity
+        attrs["periods"] = periods
+        return attrs
 
-    def get_revenueIdr(self, obj: DashboardSnapshot) -> str:
-        return _decimal_as_string(obj.summary.revenue_idr)
 
-    def get_conversion(self, obj: DashboardSnapshot) -> dict[str, float]:
-        summary = obj.summary
+class OperationalDashboardSerializer(serializers.Serializer):
+    """Camel-case API schema for the period-based operational dashboard."""
+
+    def to_representation(self, instance: OperationalDashboard) -> dict[str, Any]:
+        current_metrics = instance.current.metrics
+        previous_metrics = instance.previous.metrics
+        if current_metrics is None:
+            raise ValueError("Operational dashboard requires current metrics.")
+
+        changes = {
+            METRIC_FIELD_NAMES[field]: _change_percentage(
+                current_metrics[field],
+                previous_metrics[field] if previous_metrics is not None else None,
+            )
+            for field in METRIC_FIELDS
+        }
+        comparison_label = {
+            "daily": "vs previous day",
+            "weekly": "vs previous week",
+            "monthly": "vs previous month",
+        }[instance.granularity]
+
         return {
-            "approvalRate": _percentage(summary.approved_users, summary.inbound_users),
-            "depositRate": _percentage(summary.first_deposit_users, summary.approved_users),
-            "firstTradeRate": _percentage(summary.first_trade_users, summary.first_deposit_users),
-            "repeatTradeRate": _percentage(summary.repeat_trade_users, summary.first_trade_users),
+            "schemaVersion": 2,
+            "granularity": instance.granularity,
+            "periodStart": instance.current.period.start.isoformat(),
+            "periodEnd": instance.current.period.end.isoformat(),
+            "comparisonLabel": comparison_label,
+            "metrics": _serialize_metrics(current_metrics),
+            "change": changes,
+            "series": [
+                {
+                    "periodStart": snapshot.period.start.isoformat(),
+                    "periodEnd": snapshot.period.end.isoformat(),
+                    "dataAvailable": snapshot.data_available,
+                    "metrics": _serialize_metrics(snapshot.metrics),
+                }
+                for snapshot in instance.series
+            ],
         }
-
-    def get_change(self, obj: DashboardSnapshot) -> dict[str, float | None]:
-        summary = obj.summary
-        previous = obj.previous_summary
-        return {
-            "inboundUsers": _change_percentage(
-                summary.inbound_users,
-                previous.inbound_users if previous else None,
-            ),
-            "approvedUsers": _change_percentage(
-                summary.approved_users,
-                previous.approved_users if previous else None,
-            ),
-            "firstDeposit": _change_percentage(
-                summary.first_deposit_users,
-                previous.first_deposit_users if previous else None,
-            ),
-            "repeatDeposit": _change_percentage(
-                summary.repeat_deposit_users,
-                previous.repeat_deposit_users if previous else None,
-            ),
-            "firstTrade": _change_percentage(
-                summary.first_trade_users,
-                previous.first_trade_users if previous else None,
-            ),
-            "repeatTrade": _change_percentage(
-                summary.repeat_trade_users,
-                previous.repeat_trade_users if previous else None,
-            ),
-        }
-
-    def get_insight(self, obj: DashboardSnapshot) -> str:
-        conversion = self.get_conversion(obj)
-        stages = {
-            "Inbound → Approved": conversion["approvalRate"],
-            "Approved → First Deposit": conversion["depositRate"],
-            "First Deposit → First Trade": conversion["firstTradeRate"],
-            "First Trade → Repeat Trade": conversion["repeatTradeRate"],
-        }
-        bottleneck, rate = min(stages.items(), key=lambda item: item[1])
-        return f"Main funnel bottleneck: {bottleneck} at {rate:.2f}%."
