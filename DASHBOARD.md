@@ -414,9 +414,9 @@ The Django model is `executive_dashboard.models.DashboardDaily` and is intention
 ### Current source-data assumptions
 
 * Inbound users are registrations whose `user_info.created_at` falls in the target Jakarta calendar day.
-* Approved users are approved members in that target-day registration cohort. Approval uses `security_level >= DASHBOARD_APPROVED_SECURITY_LEVEL` or an approved `member_state`/`mip_state`. The current source schema does not provide a separate approval timestamp.
-* First and repeat deposits use the full deposit history in `deposit_base` and the target date in `target_date`.
-* First and repeat trades treat both `b_customer_code` and `s_customer_code` as participants in `trade_base`.
+* Approved users are distinct KYC members whose `member_additional_info.state` is `accept` and whose `updated_at` falls within the target Jakarta calendar day. The KYC table is the approval-event source; `security_level` is not currently used as a gating condition.
+* First and repeat deposits use the full `deposit_base` history and `target_date`. First-time and repeat depositors are mutually exclusive: repeat requires a deposit before the target date.
+* First and repeat trades treat both `b_customer_code` and `s_customer_code` as participants in `trade_base`. Repeat trade requires activity before the target date, so multiple same-day trades remain first-trade activity.
 * Volume uses `trade_base.fiat_amount`; revenue uses the configured `DASHBOARD_REVENUE_FIELD`, which defaults to `fiat_fee`.
 * Money values are returned as strings to preserve decimal precision in the API.
 
@@ -424,6 +424,7 @@ Configure these optional values in `.env` when the supervisor confirms different
 
 ```dotenv
 DASHBOARD_DB_ALIAS=reporter
+DASHBOARD_APPROVED_STATE=accept
 DASHBOARD_APPROVED_SECURITY_LEVEL=2
 DASHBOARD_DORMANT_DAYS=180
 DASHBOARD_REVENUE_FIELD=fiat_fee
