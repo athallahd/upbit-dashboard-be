@@ -1,6 +1,61 @@
 from django.db import models
 
 
+class MemberAdditionalInfo(models.Model):
+    """Historical KYC state records imported into the reporting database."""
+
+    id = models.BigIntegerField(primary_key=True)
+    member_uuid = models.CharField(max_length=36, blank=True, null=True)
+    uuid = models.CharField(max_length=36, blank=True, null=True)
+    laser_number = models.CharField(max_length=191, blank=True, null=True)
+    education_level = models.CharField(max_length=191, blank=True, null=True)
+    marital_status = models.CharField(max_length=191, blank=True, null=True)
+    objective = models.CharField(max_length=255, blank=True, null=True)
+    occupation = models.CharField(max_length=255, blank=True, null=True)
+    position = models.CharField(max_length=191, blank=True, null=True)
+    range_of_income = models.CharField(max_length=191, blank=True, null=True)
+    job_type = models.CharField(max_length=191, blank=True, null=True)
+    source_of_funds = models.CharField(max_length=255, blank=True, null=True)
+    company_name = models.CharField(max_length=255, blank=True, null=True)
+    company_address = models.CharField(max_length=512, blank=True, null=True)
+    w9_form_id = models.CharField(max_length=191, blank=True, null=True)
+    w8ben_form_id = models.CharField(max_length=191, blank=True, null=True)
+    supported_document_1_id = models.CharField(
+        max_length=191,
+        blank=True,
+        null=True,
+    )
+    supported_document_2_id = models.CharField(
+        max_length=191,
+        blank=True,
+        null=True,
+    )
+    suitability_test_score = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        blank=True,
+        null=True,
+    )
+    knowledge_test_passed = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+    )
+    phone_number = models.CharField(max_length=32, blank=True, null=True)
+    state = models.CharField(max_length=32, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    npwp_number = models.CharField(max_length=64, blank=True, null=True)
+    mother_name = models.CharField(max_length=255, blank=True, null=True)
+    suitability_test_at = models.DateTimeField(blank=True, null=True)
+    occupation_detail = models.CharField(max_length=255, blank=True, null=True)
+    company_phone_number = models.CharField(max_length=32, blank=True, null=True)
+    other_information = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "member_additional_info"
+
+
 class DashboardDaily(models.Model):
     """One completed business day of Executive Dashboard metrics.
     """

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connections, transaction
-from django.db.models import Count, Min, Q, Subquery, Sum
+from django.db.models import Subquery, Sum
 
 from lens_data.models.data import DepositBase, TradeBase, UserInfo
 
@@ -71,68 +71,56 @@ def _count_inbound_users(target_date: date, db_alias: str) -> int:
 
 
 def _count_approved_users(target_date: date, db_alias: str) -> int:
-    """Count approved members in the target-day registration cohort.
+    """Count distinct KYC members accepted on the target Jakarta date.
 
-    ``user_info`` currently contains the member's present state but no
-    approval timestamp. Until an approval-event source is provided, the
-    dashboard uses the target-day registration cohort and the configured
-    approval state/security-level rules.
+    ``member_additional_info`` is the approval-event source. Its timestamps
+    are imported as MySQL ``DATETIME`` values representing Jakarta local time,
+    so the query deliberately uses local, naive boundaries instead of the UTC
+    range used for timezone-aware ``user_info.created_at`` values.
     """
 
-    start_utc, end_utc = _local_day_as_utc_range(target_date)
-    approval_level = int(getattr(settings, "DASHBOARD_APPROVED_SECURITY_LEVEL", 2))
-    approved_query = (
-        Q(security_level__gte=approval_level)
-        | Q(member_state__iexact="approved")
-        | Q(mip_state__iexact="approved")
-    )
-    return (
-        UserInfo.objects.using(db_alias)
-        .filter(created_at__gte=start_utc, created_at__lt=end_utc)
-        .filter(approved_query)
-        .count()
-    )
+    start_local = datetime.combine(target_date, datetime.min.time())
+    end_local = start_local + timedelta(days=1)
+    approval_state = getattr(settings, "DASHBOARD_APPROVED_STATE", "accept")
+    sql = """
+        SELECT COUNT(DISTINCT member_uuid)
+        FROM member_additional_info
+        WHERE state = %s
+          AND member_uuid IS NOT NULL
+          AND member_uuid <> ''
+          AND updated_at >= %s
+          AND updated_at < %s
+    """
+
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute(sql, [approval_state, start_local, end_local])
+        row = cursor.fetchone()
+
+    return int((row or (0,))[0] or 0)
 
 
 def _count_deposit_metrics(target_date: date, db_alias: str) -> tuple[int, int]:
-    """Return first-deposit and repeat-deposit user counts for a date."""
+    """Return mutually exclusive first- and repeat-deposit user counts.
+
+    A user who makes multiple deposits on their first day is still a first
+    depositor. Repeat depositors must have at least one deposit before the
+    target date, then deposit again on the target date.
+    """
 
     deposits = DepositBase.objects.using(db_alias)
-    target_members = deposits.filter(target_date=target_date).values("member_id")
+    target_deposits = deposits.filter(target_date=target_date)
+    prior_deposit_members = deposits.filter(
+        target_date__lt=target_date,
+    ).values("member_id")
 
-    first_deposit_members = (
-        deposits.values("member_id")
-        .annotate(first_deposit_date=Min("target_date"))
-        .filter(
-            first_deposit_date=target_date,
-            member_id__in=Subquery(target_members),
-        )
-        .values("member_id")
-    )
     first_deposit_users = (
-        deposits.filter(
-            target_date=target_date,
-            member_id__in=Subquery(first_deposit_members),
-        )
+        target_deposits.exclude(member_id__in=Subquery(prior_deposit_members))
         .values("member_id")
         .distinct()
         .count()
     )
-
-    repeat_deposit_members = (
-        deposits.values("member_id")
-        .annotate(deposit_count=Count("deposit_id"))
-        .filter(
-            deposit_count__gte=2,
-            member_id__in=Subquery(target_members),
-        )
-        .values("member_id")
-    )
     repeat_deposit_users = (
-        deposits.filter(
-            target_date=target_date,
-            member_id__in=Subquery(repeat_deposit_members),
-        )
+        target_deposits.filter(member_id__in=Subquery(prior_deposit_members))
         .values("member_id")
         .distinct()
         .count()
@@ -154,29 +142,25 @@ def _trade_participant_metrics(target_date: date, db_alias: str) -> dict[str, in
     sql = """
         SELECT
             COALESCE(SUM(CASE WHEN traded_on_target = 1 THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(
-                CASE
-                    WHEN first_trade_date = %s AND traded_on_target = 1
-                    THEN 1 ELSE 0
-                END
-            ), 0),
-            COALESCE(SUM(
-                CASE
-                    WHEN lifetime_trade_count >= 2 AND traded_on_target = 1
-                    THEN 1 ELSE 0
-                END
-            ), 0),
+            COALESCE(SUM(CASE
+                WHEN traded_on_target = 1 AND has_prior_trade = 0
+                THEN 1 ELSE 0
+            END), 0),
+            COALESCE(SUM(CASE
+                WHEN traded_on_target = 1 AND has_prior_trade = 1
+                THEN 1 ELSE 0
+            END), 0),
             COALESCE(SUM(
                 CASE WHEN last_trade_date < %s THEN 1 ELSE 0 END
             ), 0)
         FROM (
             SELECT
                 participant_id,
-                MIN(trade_date) AS first_trade_date,
                 MAX(trade_date) AS last_trade_date,
-                COUNT(*) AS lifetime_trade_count,
                 MAX(CASE WHEN trade_date = %s THEN 1 ELSE 0 END)
-                    AS traded_on_target
+                    AS traded_on_target,
+                MAX(CASE WHEN trade_date < %s THEN 1 ELSE 0 END)
+                    AS has_prior_trade
             FROM (
                 SELECT b_customer_code AS participant_id, trade_date, trade_no
                 FROM trade_base
@@ -191,7 +175,10 @@ def _trade_participant_metrics(target_date: date, db_alias: str) -> dict[str, in
     """
 
     with connections[db_alias].cursor() as cursor:
-        cursor.execute(sql, [target_date, cutoff_date, target_date, target_date, target_date])
+        cursor.execute(
+            sql,
+            [cutoff_date, target_date, target_date, target_date, target_date],
+        )
         row = cursor.fetchone()
 
     trading_users, first_trade_users, repeat_trade_users, dormant_users = row or (0, 0, 0, 0)

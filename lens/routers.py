@@ -1,3 +1,6 @@
+from django.conf import settings
+
+
 class AuthRouter(object):
     """
     A router to control all database operations on models in the
@@ -85,7 +88,16 @@ class AuthRouter(object):
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         """
-        Make sure the auth app only appears in the 'auth'
-        database.
+        The reporting schema is provisioned from SQL and must not be managed by
+        Django migrations.  Local API testing additionally needs Django's own
+        authentication tables so an Okta subject can be allowlisted locally.
         """
+        local_auth_apps = {'auth', 'contenttypes', 'sessions'}
+        if (
+            db == 'reporter'
+            and app_label in local_auth_apps
+            and settings.LOCAL_AUTH_SCHEMA_MANAGED
+        ):
+            return True
+
         return False

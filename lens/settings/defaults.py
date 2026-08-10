@@ -16,6 +16,9 @@ LOCAL_API_PREFIX = os.getenv('LOCAL_API_PREFIX', default='id-api')
 SECRET_KEY = os.getenv('SECRET_KEY', default='keykeykikiki123ki@#$')
 
 PROJECT_ENV = os.getenv('PROJECT_ENV', default='').lower()
+LOCAL_AUTH_SCHEMA_MANAGED = (
+    os.getenv('LOCAL_AUTH_SCHEMA_MANAGED', default='false').lower() == 'true'
+)
 
 DEBUG = True if PROJECT_ENV == 'local' else False
 
@@ -304,6 +307,7 @@ DASHBOARD_DB_ALIAS = os.getenv('DASHBOARD_DB_ALIAS', default='reporter')
 DASHBOARD_APPROVED_SECURITY_LEVEL = int(
     os.getenv('DASHBOARD_APPROVED_SECURITY_LEVEL', default='2')
 )
+DASHBOARD_APPROVED_STATE = os.getenv('DASHBOARD_APPROVED_STATE', default='accept')
 DASHBOARD_DORMANT_DAYS = int(os.getenv('DASHBOARD_DORMANT_DAYS', default='180'))
 DASHBOARD_REVENUE_FIELD = os.getenv('DASHBOARD_REVENUE_FIELD', default='fiat_fee')
 
