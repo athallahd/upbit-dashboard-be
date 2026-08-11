@@ -521,9 +521,15 @@ The historical chart shows all requested periods.
 `change` is a percentage versus one immediately preceding period. A missing
 previous period returns `null`; previous zero and current zero returns `0`;
 previous zero and a non-zero current value returns `null` rather than an
-infinite percentage. A missing daily cache row is returned in the chart as
-`dataAvailable: false` with `metrics: null`; it is not represented as zero
-activity.
+infinite percentage.
+
+`dashboard_daily_summary` is also the refresh-coverage signal. A Daily period
+is available only when its snapshot row exists. A Weekly or Monthly period is
+available only when every included Jakarta calendar day has a Daily snapshot.
+An incomplete period is returned in the chart as `dataAvailable: false` with
+`metrics: null`; it is never represented as zero activity. Once coverage is
+complete, weekly/monthly metrics are still calculated from source tables so
+distinct-user metrics remain correct.
 
 ### Event-based metric rules
 
@@ -543,7 +549,8 @@ activity.
 
 Weekly and monthly distinct-user metrics are calculated from source tables;
 they are not built by summing daily distinct-user counts. Daily reads the
-cached summary row, while weekly and monthly calculate an accurate range.
+cached summary row, while weekly and monthly calculate an accurate range in
+batched source queries for the requested history plus its comparison period.
 
 ### Operational Journey, not same-day conversion
 
@@ -589,3 +596,16 @@ The local database already has indexes for `user_info.created_at` and
 composite indexes still needed by `deposit_base` and `trade_base` are prepared
 for manual review in `local-db/maintenance/001_dashboard_operational_indexes.sql`.
 They are not run by Django or the local database initializer.
+The SQL-owned cache schema is likewise manual in
+`local-db/maintenance/002_dashboard_daily_summary_schema.sql`; it is not a
+Django migration or an automatic MySQL initializer.
+
+### Okta access contract
+
+The endpoint requires a valid Okta Bearer token. The backend validates its
+signature, issuer, and audience, then allowlists the token's `sub` claim by
+looking up `auth_user.username` on the reporter database. Local environments
+may provision the Django auth schema only with `LOCAL_AUTH_SCHEMA_MANAGED=true`.
+Production provisioning remains an operational responsibility: an approved
+dashboard user must have a reporter `auth_user` record whose `username` exactly
+matches its Okta `sub`. The API never auto-creates users from a token.
