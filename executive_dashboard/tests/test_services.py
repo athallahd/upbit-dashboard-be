@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -9,14 +10,50 @@ from django.test import SimpleTestCase
 from executive_dashboard.services import (
     DashboardPeriod,
     DashboardPeriodSnapshot,
+    DashboardDataNotReady,
+    _calculate_period_metrics_batch,
     _count_approved_users_for_period,
     _count_deposit_metrics_for_period,
     _trade_participant_metrics_for_period,
     build_period_ranges,
+    get_operational_dashboard,
     get_latest_completed_period,
     get_previous_period,
     get_target_date,
 )
+
+
+def metric_values(**overrides):
+    values = {
+        "inbound_users": 0,
+        "approved_users": 0,
+        "first_deposit_users": 0,
+        "repeat_deposit_users": 0,
+        "first_trade_users": 0,
+        "repeat_trade_users": 0,
+        "dormant_users": 0,
+        "trading_users": 0,
+        "trade_count": 0,
+        "total_volume_idr": Decimal("0"),
+        "revenue_idr": Decimal("0"),
+    }
+    values.update(overrides)
+    return values
+
+
+def summaries_for_periods(*periods, missing_dates=()):
+    missing = set(missing_dates)
+    summaries = {}
+    for period in periods:
+        current = period.start
+        while current <= period.end:
+            if current not in missing:
+                summaries[current] = SimpleNamespace(
+                    target_date=current,
+                    **metric_values(),
+                )
+            current += timedelta(days=1)
+    return summaries
 
 
 class DashboardDateTests(SimpleTestCase):
@@ -172,6 +209,137 @@ class TradeMetricTests(SimpleTestCase):
                 date(2026, 7, 19),
             ],
         )
+
+
+class BatchedPeriodMetricTests(SimpleTestCase):
+    def test_batch_calculation_uses_five_queries_for_all_requested_periods(self):
+        cursor = MagicMock()
+        cursor.fetchall.side_effect = [
+            [(0, 1)],
+            [(0, 2)],
+            [(0, 3, 4)],
+            [(0, 5, 6, 7, 8)],
+            [(0, 9, Decimal("10.5"), Decimal("0.5"))],
+        ]
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        connections = MagicMock()
+        connections.__getitem__.return_value = connection
+        period = DashboardPeriod("weekly", date(2026, 8, 3), date(2026, 8, 9))
+
+        with patch("executive_dashboard.services.connections", connections):
+            result = _calculate_period_metrics_batch((period,), "reporter")
+
+        self.assertEqual(cursor.execute.call_count, 5)
+        self.assertEqual(
+            result[period],
+            metric_values(
+                inbound_users=1,
+                approved_users=2,
+                first_deposit_users=3,
+                repeat_deposit_users=4,
+                trading_users=5,
+                first_trade_users=6,
+                repeat_trade_users=7,
+                dormant_users=8,
+                trade_count=9,
+                total_volume_idr=Decimal("10.5"),
+                revenue_idr=Decimal("0.5"),
+            ),
+        )
+
+        executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertIn("first_deposits", executed_sql[2])
+        self.assertIn("participant_first_trades", executed_sql[3])
+
+
+class DashboardReadinessTests(SimpleTestCase):
+    reference_date = date(2026, 8, 10)
+
+    @patch("executive_dashboard.services._calculate_period_metrics_batch")
+    @patch("executive_dashboard.services._load_daily_summaries")
+    def test_daily_missing_snapshot_is_a_chart_gap_not_zero(
+        self,
+        load_summaries,
+        calculate_batch,
+    ):
+        current = DashboardPeriod("daily", date(2026, 8, 9), date(2026, 8, 9))
+        load_summaries.return_value = summaries_for_periods(current)
+        calculate_batch.return_value = {}
+
+        dashboard = get_operational_dashboard("daily", 2, self.reference_date)
+
+        self.assertFalse(dashboard.series[0].data_available)
+        self.assertIsNone(dashboard.series[0].metrics)
+        self.assertTrue(dashboard.current.data_available)
+        self.assertFalse(dashboard.previous.data_available)
+        calculate_batch.assert_called_once_with((), "reporter")
+
+    @patch("executive_dashboard.services._calculate_period_metrics_batch")
+    @patch("executive_dashboard.services._load_daily_summaries")
+    def test_weekly_missing_day_is_a_gap_while_current_week_remains_available(
+        self,
+        load_summaries,
+        calculate_batch,
+    ):
+        previous = DashboardPeriod("weekly", date(2026, 7, 27), date(2026, 8, 2))
+        current = DashboardPeriod("weekly", date(2026, 8, 3), date(2026, 8, 9))
+        load_summaries.return_value = summaries_for_periods(
+            previous,
+            current,
+            missing_dates=(date(2026, 7, 28),),
+        )
+        calculate_batch.return_value = {current: metric_values(inbound_users=4)}
+
+        dashboard = get_operational_dashboard("weekly", 2, self.reference_date)
+
+        self.assertFalse(dashboard.series[0].data_available)
+        self.assertTrue(dashboard.current.data_available)
+        self.assertEqual(dashboard.current.metrics["inbound_users"], 4)
+        self.assertFalse(dashboard.previous.data_available)
+        calculate_batch.assert_called_once_with((current,), "reporter")
+
+    @patch("executive_dashboard.services._calculate_period_metrics_batch")
+    @patch("executive_dashboard.services._load_daily_summaries")
+    def test_incomplete_latest_month_raises_data_not_ready(
+        self,
+        load_summaries,
+        calculate_batch,
+    ):
+        previous = DashboardPeriod("monthly", date(2026, 6, 1), date(2026, 6, 30))
+        current = DashboardPeriod("monthly", date(2026, 7, 1), date(2026, 7, 31))
+        load_summaries.return_value = summaries_for_periods(
+            previous,
+            current,
+            missing_dates=(date(2026, 7, 7),),
+        )
+        calculate_batch.return_value = {previous: metric_values()}
+
+        with self.assertRaises(DashboardDataNotReady):
+            get_operational_dashboard("monthly", 1, self.reference_date)
+
+        calculate_batch.assert_called_once_with((previous,), "reporter")
+
+    @patch("executive_dashboard.services._calculate_period_metrics_batch")
+    @patch("executive_dashboard.services._load_daily_summaries")
+    def test_complete_zero_activity_period_remains_available(
+        self,
+        load_summaries,
+        calculate_batch,
+    ):
+        previous = DashboardPeriod("weekly", date(2026, 7, 27), date(2026, 8, 2))
+        current = DashboardPeriod("weekly", date(2026, 8, 3), date(2026, 8, 9))
+        load_summaries.return_value = summaries_for_periods(previous, current)
+        calculate_batch.return_value = {
+            previous: metric_values(),
+            current: metric_values(),
+        }
+
+        dashboard = get_operational_dashboard("weekly", 1, self.reference_date)
+
+        self.assertTrue(dashboard.current.data_available)
+        self.assertEqual(dashboard.current.metrics["inbound_users"], 0)
+        self.assertEqual(dashboard.current.metrics["total_volume_idr"], Decimal("0"))
 
 
 class DashboardRefreshCommandTests(SimpleTestCase):
