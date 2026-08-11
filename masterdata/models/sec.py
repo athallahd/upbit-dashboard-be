@@ -23,7 +23,7 @@ class AssetMaster(TimeStampedModel):
 
 class ICEXAssetMaster(TimeStampedModel):
     id = models.BigAutoField(primary_key=True)
-    asset_id = models.CharField(max_length=32, primary_key=True)
+    asset_id = models.CharField(max_length=32)
     asset_code = models.CharField(max_length=32, unique=True)
     asset_name = models.CharField(max_length=32)
     is_whitelisted = models.BooleanField(default=False)

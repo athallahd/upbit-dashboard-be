@@ -175,8 +175,13 @@ class LensSmurfingId(TimeStampedModel):
     counts = models.IntegerField(blank=True, null=True)
     sum_fiat_amount = models.DecimalField(max_digits=38, decimal_places=20, null=True)
     annual_income = models.CharField(max_length=100, blank=True, null=True)
-    source_of_funds = models.CharField(blank=True, null=True)
-    monthly_income = models.DecimalField(max_digits=30, blank=True, null=True)
+    source_of_funds = models.CharField(max_length=255, blank=True, null=True)
+    monthly_income = models.DecimalField(
+        max_digits=30,
+        decimal_places=20,
+        blank=True,
+        null=True,
+    )
     start_date = models.DateField(db_index=True) 
     end_date = models.DateField(db_index=True)
     p1_observation_period = models.IntegerField(blank=True, null=True)

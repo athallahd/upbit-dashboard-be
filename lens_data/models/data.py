@@ -10,7 +10,7 @@ class CMCDaily(models.Model):
     day = models.DateField(db_index=True)
     hour = models.CharField(max_length=2)
     coin_name = models.CharField(max_length=50)
-    abbreviations = models.CharField(max_length=10, primary_key=True)
+    abbreviations = models.CharField(max_length=10)
     bot_rate = models.DecimalField(max_digits=38, decimal_places=20, null=True)
     usd_price = models.DecimalField(max_digits=38, decimal_places=20, null=True)
     thb_price = models.DecimalField(max_digits=38, decimal_places=20, null=True)
@@ -72,7 +72,7 @@ class DepositBase(models.Model):
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
-    member_id = models.BigAutoField(primary_key=True)
+    member_id = models.BigIntegerField()
     currency_id = models.IntegerField(blank=True, null=True)
     currency_name = models.CharField(max_length=20, null=True)
     amount = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
@@ -95,7 +95,7 @@ class DepositBaseJoinAssetMaster(models.Model):
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
-    member_id = models.BigAutoField(primary_key=True)
+    member_id = models.BigIntegerField()
     # currency_id = models.IntegerField(blank=True, null=True)
     currency_name = models.CharField(max_length=20, null=True)
     amount = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
@@ -127,7 +127,7 @@ class WithdrawBase(models.Model):
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
-    member_id = models.BigAutoField(primary_key=True)
+    member_id = models.BigIntegerField()
     currency_id = models.IntegerField(blank=True, null=True)
     currency_name = models.CharField(max_length=20, null=True)
     amount = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
@@ -149,7 +149,7 @@ class WithdrawBaseJoinAssetMaster(models.Model):
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
-    member_id = models.BigAutoField(primary_key=True)
+    member_id = models.BigIntegerField()
     # currency_id = models.IntegerField(blank=True, null=True)
     currency_name = models.CharField(max_length=20, null=True)
     amount = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
@@ -250,7 +250,7 @@ class LoginHistory(models.Model):
 
 class InvestmentEventBase(models.Model):
     investment_event_id = models.BigIntegerField(primary_key=True)
-    event_date = models.DateField(primary_key=True)
+    event_date = models.DateField()
     event_time = models.TimeField()
     created_date = models.DateField()
     created_time = models.TimeField()
@@ -276,7 +276,7 @@ class InvestmentEventBase(models.Model):
     transaction_type = models.IntegerField(blank=True, null=True)
     member_id = models.BigIntegerField()
     member_uuid = models.CharField(unique=True, max_length=191, blank=True, null=True)
-    
+
     class Meta:
         managed = False
         db_table = 'investment_event_base'
@@ -299,7 +299,7 @@ class OrderBase(models.Model):
     order_type_code = models.CharField(max_length=191, blank=True, null=True)
     quantity = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
     order_value = models.DecimalField(max_digits=32, decimal_places=20, blank=True, null=True)
-    
+
     class Meta:
         managed = False
         db_table = 'order_base'
@@ -500,7 +500,7 @@ class UptimeSummary(models.Model):
 class DailyReconciliation(models.Model):
     id = models.BigAutoField(primary_key=True)
     date = models.DateField(null=False)
-    window = models.CharField(null=False)
+    window = models.CharField(max_length=32, null=False)
     
     volume_idr = models.DecimalField(max_digits=40, decimal_places=8, blank=True, null=True)
     volume_non_idr = models.DecimalField(max_digits=40, decimal_places=8, blank=True, null=True)
@@ -530,7 +530,3 @@ class DailyReconciliation(models.Model):
     class Meta:
         managed = False
         db_table = 'daily_reconciliation'
-
-
-    
-    
