@@ -22,7 +22,8 @@ class AssetMaster(TimeStampedModel):
         db_table = 'asset_master'
 
 class ICEXAssetMaster(TimeStampedModel):
-    id = models.BigAutoField(primary_key=True)
+    pk = models.CompositePrimaryKey("id", "asset_id")
+    id = models.BigIntegerField()
     asset_id = models.CharField(max_length=32)
     asset_code = models.CharField(max_length=32, unique=True)
     asset_name = models.CharField(max_length=32)

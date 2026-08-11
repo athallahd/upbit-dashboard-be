@@ -55,7 +55,8 @@ class AssetMasterAdmin(admin.ModelAdmin, ExportCsvMixin):
     save_as = True
     actions = ['export_as_csv']
 
-@admin.register(ICEXAssetMaster)
+# Django admin does not support models with composite primary keys.
+# ICEXAssetMaster remains available through application queries and APIs.
 class ICEXAssetMasterAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = (        
         'asset_id',

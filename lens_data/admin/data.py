@@ -159,7 +159,8 @@ class UserInfoAdmin(admin.ModelAdmin, ExportCsvMixin):
     def created_at_jkt(self, obj):
         return obj.created_at + timedelta(hours=settings.LOCAL_TIME_DELTA)
     created_at_jkt.short_description = 'Created At (JKT)'
-@admin.register(DepositBase)
+# Django admin does not support models with composite primary keys.
+# DepositBase remains available through application queries and APIs.
 class DepositBaseAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = (
         'deposit_id',        
@@ -191,7 +192,8 @@ class DepositBaseAdmin(admin.ModelAdmin, ExportCsvMixin):
         return False
     def has_delete_permission(self, request, obj=None):
         return False
-@admin.register(WithdrawBase)
+# Django admin does not support models with composite primary keys.
+# WithdrawBase remains available through application queries and APIs.
 class WithdrawBaseAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = (
         'withdraw_id',        
@@ -304,7 +306,8 @@ class LoginHistoryAdmin(admin.ModelAdmin, ExportCsvMixin):
         return False
 
 
-@admin.register(InvestmentEventBase)
+# Django admin does not support models with composite primary keys.
+# InvestmentEventBase remains available through application queries and APIs.
 class InvestmentEventBaseAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = (
         'investment_event_id',

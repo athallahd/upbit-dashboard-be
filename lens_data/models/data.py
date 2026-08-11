@@ -6,7 +6,8 @@ from django.db import models
 from masterdata.models.sec import AssetMaster
 
 class CMCDaily(models.Model):
-    th = models.DateTimeField(primary_key=True)
+    pk = models.CompositePrimaryKey("th", "abbreviations")
+    th = models.DateTimeField()
     day = models.DateField(db_index=True)
     hour = models.CharField(max_length=2)
     coin_name = models.CharField(max_length=50)
@@ -68,7 +69,8 @@ class TradeBase(models.Model):
 
 
 class DepositBase(models.Model):
-    deposit_id = models.BigIntegerField(primary_key=True)
+    pk = models.CompositePrimaryKey("deposit_id", "member_id")
+    deposit_id = models.BigIntegerField()
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
@@ -91,7 +93,8 @@ class DepositBase(models.Model):
 
 
 class DepositBaseJoinAssetMaster(models.Model):
-    deposit_id = models.BigIntegerField(primary_key=True)
+    pk = models.CompositePrimaryKey("deposit_id", "member_id")
+    deposit_id = models.BigIntegerField()
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
@@ -123,7 +126,8 @@ class DepositBaseJoinAssetMaster(models.Model):
 
 
 class WithdrawBase(models.Model):
-    withdraw_id = models.BigIntegerField(primary_key=True)
+    pk = models.CompositePrimaryKey("withdraw_id", "member_id")
+    withdraw_id = models.BigIntegerField()
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
@@ -145,7 +149,8 @@ class WithdrawBase(models.Model):
         db_table = 'withdraw_base'
 
 class WithdrawBaseJoinAssetMaster(models.Model):
-    withdraw_id = models.BigIntegerField(primary_key=True)
+    pk = models.CompositePrimaryKey("withdraw_id", "member_id")
+    withdraw_id = models.BigIntegerField()
     target_date = models.DateField(db_index=True)
     target_time = models.TimeField()
     member_uuid = models.CharField(max_length=191, blank=True, null=True)
@@ -249,7 +254,8 @@ class LoginHistory(models.Model):
 
 
 class InvestmentEventBase(models.Model):
-    investment_event_id = models.BigIntegerField(primary_key=True)
+    pk = models.CompositePrimaryKey("investment_event_id", "event_date")
+    investment_event_id = models.BigIntegerField()
     event_date = models.DateField()
     event_time = models.TimeField()
     created_date = models.DateField()
