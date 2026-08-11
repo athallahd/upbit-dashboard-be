@@ -85,8 +85,9 @@ class BacktestTriggerAdmin(admin.ModelAdmin):
         if(obj):
             selected_ruleset_name=obj.ruleset_name
             for active in active_ruleset:
-                if(active.form_data.value['task_name']==selected_ruleset_name):
-                    form_class=create_dynamic_form(active.form_data.value, obj.parameters)
+                form_data = active.get_form_data()
+                if(form_data['task_name']==selected_ruleset_name):
+                    form_class=create_dynamic_form(form_data, obj.parameters)
                     return modelform_factory(BacktestTrigger, form=form_class)
                 else:
                     form_class=BacktestBlankForm
@@ -116,4 +117,3 @@ class BacktestTriggerAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return True
-    
