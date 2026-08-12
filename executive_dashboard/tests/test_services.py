@@ -90,6 +90,26 @@ class DashboardDateTests(SimpleTestCase):
         self.assertEqual(period.start, date(2024, 2, 1))
         self.assertEqual(period.end, date(2024, 2, 29))
 
+    def test_historical_end_month_becomes_latest_monthly_period(self):
+        requested = DashboardPeriod("monthly", date(2026, 7, 1), date(2026, 7, 31))
+        previous = DashboardPeriod("monthly", date(2026, 6, 1), date(2026, 6, 30))
+        with (
+            patch("executive_dashboard.services._load_daily_summaries") as load_summaries,
+            patch("executive_dashboard.services._calculate_period_metrics_batch") as calculate,
+        ):
+            load_summaries.return_value = summaries_for_periods(requested, previous)
+            calculate.return_value = {
+                requested: metric_values(),
+                previous: metric_values(),
+            }
+
+            dashboard = get_operational_dashboard(
+                "monthly", 1, end_month=date(2026, 7, 1)
+            )
+
+        self.assertEqual(dashboard.current.period, requested)
+        self.assertEqual(dashboard.previous.period, previous)
+
     def test_period_ranges_are_chronological(self):
         periods = build_period_ranges("weekly", 3, date(2026, 8, 10))
 

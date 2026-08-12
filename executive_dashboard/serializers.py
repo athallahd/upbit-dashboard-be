@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from rest_framework import serializers
 
-from .services import METRIC_FIELDS, OperationalDashboard
+from .services import METRIC_FIELDS, OperationalDashboard, get_latest_completed_period
 
 
 PERIOD_LIMITS = {
@@ -65,6 +66,11 @@ class DashboardQuerySerializer(serializers.Serializer):
         required=False,
     )
     periods = serializers.IntegerField(min_value=1, required=False)
+    end_month = serializers.RegexField(
+        regex=r"^\d{4}-(0[1-9]|1[0-2])$",
+        required=False,
+        help_text="Completed historical month in YYYY-MM format; monthly only.",
+    )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         granularity = attrs.get("granularity", "daily")
@@ -77,6 +83,22 @@ class DashboardQuerySerializer(serializers.Serializer):
             )
         attrs["granularity"] = granularity
         attrs["periods"] = periods
+
+        end_month = attrs.get("end_month")
+        if end_month is None:
+            return attrs
+        if granularity != "monthly":
+            raise serializers.ValidationError(
+                {"end_month": "end_month is only supported when granularity=monthly."}
+            )
+
+        end_month_date = date.fromisoformat(f"{end_month}-01")
+        latest_completed_month = get_latest_completed_period("monthly")
+        if end_month_date > latest_completed_month.start:
+            raise serializers.ValidationError(
+                {"end_month": "end_month must be a completed calendar month."}
+            )
+        attrs["end_month"] = end_month_date
         return attrs
 
 

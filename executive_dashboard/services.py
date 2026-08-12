@@ -741,8 +741,16 @@ def get_operational_dashboard(
     granularity: DashboardGranularity = "daily",
     periods: int = 30,
     reference_date: date | None = None,
+    end_month: date | None = None,
 ) -> OperationalDashboard:
     """Return chart history and latest completed operational dashboard period."""
+
+    if end_month is not None:
+        if granularity != "monthly":
+            raise ValueError("end_month is only supported for monthly dashboards")
+        if end_month.day != 1:
+            raise ValueError("end_month must be the first day of its calendar month")
+        reference_date = (end_month + timedelta(days=32)).replace(day=1)
 
     db_alias = get_dashboard_db_alias()
     period_ranges = build_period_ranges(granularity, periods, reference_date)

@@ -61,6 +61,29 @@ class DashboardDailyViewTests(SimpleTestCase):
         self.assertEqual(response.data["schemaVersion"], 2)
         dashboard_service.assert_called_once_with(granularity="weekly", periods=12)
 
+    def test_passes_historical_end_month_to_existing_dashboard_url(self):
+        request = APIRequestFactory().get(
+            "/api/dashboard/daily/?granularity=monthly&periods=12&end_month=2026-06"
+        )
+        force_authenticate(request, user=SimpleNamespace(is_authenticated=True))
+
+        with (
+            patch(
+                "executive_dashboard.serializers.get_latest_completed_period",
+                return_value=DashboardPeriod("monthly", date(2026, 7, 1), date(2026, 7, 31)),
+            ),
+            patch(
+                "executive_dashboard.views.get_operational_dashboard",
+                return_value=operational_dashboard(),
+            ) as dashboard_service,
+        ):
+            response = DashboardDailyView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        dashboard_service.assert_called_once_with(
+            granularity="monthly", periods=12, end_month=date(2026, 6, 1)
+        )
+
     def test_rejects_invalid_period_parameters(self):
         request = APIRequestFactory().get(
             "/api/dashboard/daily/?granularity=monthly&periods=25"

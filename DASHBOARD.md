@@ -454,12 +454,17 @@ selects the timeline and automatically sends query parameters:
 GET /api/dashboard/daily/?granularity=daily&periods=30
 GET /api/dashboard/daily/?granularity=weekly&periods=12
 GET /api/dashboard/daily/?granularity=monthly&periods=12
+GET /api/dashboard/daily/?granularity=monthly&periods=12&end_month=2026-07
 ```
 
 ### Completed calendar periods
 
-The dashboard uses Asia/Jakarta business periods. The user does not type a
-date or query parameter.
+The dashboard uses Asia/Jakarta business periods. Daily and Weekly always end
+at the latest completed period. Monthly can additionally use the optional
+`end_month=YYYY-MM` query parameter to inspect a completed historical calendar
+month; it is rejected for Daily/Weekly and cannot be the current or a future
+month. The frontend exposes this as a Month picker only when Monthly is
+selected, so users do not need to construct query strings themselves.
 
 | Timeline | Latest period | Previous-period comparison | Default / maximum |
 | --- | --- | --- | --- |
@@ -471,6 +476,26 @@ For example, on 10 August 2026 the latest periods are 9 August for Daily,
 3-9 August for Weekly, and 1-31 July for Monthly. A KPI card compares only
 the selected latest period with its immediately preceding equivalent period.
 The historical chart shows all requested periods.
+
+### Workspace behaviour
+
+The same endpoint powers the whole dashboard workspace. The Metric Explorer
+lists the available metrics as selectable cards; selecting a card (or one of
+the three headline cards) changes the historical bar chart without another
+endpoint. Headline cards are Inbound Users, Trading Volume, and Revenue.
+
+The event-stage visual is deliberately timeline-aware:
+
+* **Monthly** shows a *Monthly User Journey* with the five event stages. It is
+  a visual progression of monthly activity, not a same-cohort conversion
+  funnel, and does not display conversion rates or a “Largest Drop”.
+* **Daily and Weekly** show an *Operational Pulse*: the selected metric, the
+  strongest positive change, and the largest decline for that period. This
+  avoids implying that events which occurred in the same short period belong
+  to the same users.
+
+Rule-based Operational Insights are shown alongside both views. AI-generated
+insights remain a future integration, not an implied live capability.
 
 ### Response schema
 

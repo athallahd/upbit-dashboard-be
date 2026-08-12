@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -69,6 +70,38 @@ class DashboardQuerySerializerTests(SimpleTestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("periods", serializer.errors)
+
+    @patch("executive_dashboard.serializers.get_latest_completed_period")
+    def test_accepts_completed_historical_end_month(self, latest_period):
+        latest_period.return_value = DashboardPeriod(
+            "monthly", date(2026, 7, 1), date(2026, 7, 31)
+        )
+        serializer = DashboardQuerySerializer(
+            data={"granularity": "monthly", "periods": 12, "end_month": "2026-06"}
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["end_month"], date(2026, 6, 1))
+
+    def test_rejects_end_month_for_non_monthly_timeline(self):
+        serializer = DashboardQuerySerializer(
+            data={"granularity": "weekly", "end_month": "2026-06"}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("end_month", serializer.errors)
+
+    @patch("executive_dashboard.serializers.get_latest_completed_period")
+    def test_rejects_current_or_future_end_month(self, latest_period):
+        latest_period.return_value = DashboardPeriod(
+            "monthly", date(2026, 7, 1), date(2026, 7, 31)
+        )
+        serializer = DashboardQuerySerializer(
+            data={"granularity": "monthly", "end_month": "2026-08"}
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("end_month", serializer.errors)
 
 
 class OperationalDashboardSerializerTests(SimpleTestCase):
